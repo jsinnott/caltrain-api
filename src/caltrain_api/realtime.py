@@ -290,6 +290,7 @@ class SiriRealtimeSource:
         return resp.content
 
     def fetch(self) -> RealtimeSnapshot:
+        """Fetch train data (and alerts, if due) from 511. See :meth:`RealtimeSource.fetch`."""
         now = self._clock()
         raw = self._get(self.VEHICLE_MONITORING_URL, "VehicleMonitoring", format="json")
         try:

@@ -92,7 +92,7 @@ class _Polyline:
 class Corridor:
     """The Caltrain line as a single measured polyline.
 
-    Obtain one from :attr:`Schedule.corridor`; constructing directly is for tests.
+    Obtain one from :attr:`~caltrain_api.Schedule.corridor`; constructing directly is for tests.
     Immutable and safe to share between threads.
     """
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "caltrain-api"
-version = "1.0.1"
+version = "1.1.0"
 description = "Caltrain schedules and train positions (lat/lon, milepost, and plain-English) from GTFS and 511 real-time data."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,6 +37,7 @@ dependencies = [
 Homepage = "https://github.com/jsinnott/caltrain-api"
 Repository = "https://github.com/jsinnott/caltrain-api"
 Issues = "https://github.com/jsinnott/caltrain-api/issues"
+Documentation = "https://caltrain-api.readthedocs.io/"
 Changelog = "https://github.com/jsinnott/caltrain-api#changelog"
 
 [project.optional-dependencies]
@@ -44,6 +45,12 @@ dev = [
     "pytest>=8",
     "mypy>=1.10",
     "types-protobuf",
+]
+docs = [
+    "sphinx>=7,<9",   # autodoc-pydantic 2.2 drops model properties/methods under Sphinx 9
+    "furo",
+    "myst-parser",
+    "autodoc-pydantic>=2",
 ]
 
 [tool.hatch.build.targets.wheel]

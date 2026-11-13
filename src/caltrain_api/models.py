@@ -151,12 +151,12 @@ class Stop(_Frozen):
 
     @property
     def arrival(self) -> datetime:
-        """Best available arrival time: expected if known, else scheduled."""
+        """The best available arrival time (expected if known, else scheduled)."""
         return self.expected_arrival or self.scheduled_arrival
 
     @property
     def departure(self) -> datetime:
-        """Best available departure time: expected if known, else scheduled."""
+        """The best available departure time (expected if known, else scheduled)."""
         return self.expected_departure or self.scheduled_departure
 
     @property
@@ -173,7 +173,7 @@ class TrainPosition(TrackLocation):
     A ``TrackLocation`` plus when, how we know, and how it relates to stations.
     ``station``/``previous_station``/``next_station`` refer to *physical*
     neighbors along the track, including stations the train does not stop at;
-    use :attr:`Train.next_stop` for the next station it will serve.
+    use :attr:`~caltrain_api.Train.next_stop` for the next station it will serve.
     """
 
     source: PositionSource
@@ -263,10 +263,12 @@ class Train(_Frozen):
 
     @property
     def origin(self) -> Station:
+        """The station the trip starts from."""
         return self.stops[0].station
 
     @property
     def destination(self) -> Station:
+        """The station the trip ends at."""
         return self.stops[-1].station
 
     @property
@@ -315,6 +317,7 @@ class Journey(_Frozen):
 
     @property
     def scheduled_duration(self) -> timedelta:
+        """Timetable duration, origin departure to destination arrival."""
         return self.destination_stop.scheduled_arrival - self.origin_stop.scheduled_departure
 
     @property

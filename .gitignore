@@ -30,3 +30,6 @@ Thumbs.db
 
 # Personal project notes for Claude Code (not part of the published project)
 CLAUDE.md
+
+# Sphinx build output
+docs/_build/

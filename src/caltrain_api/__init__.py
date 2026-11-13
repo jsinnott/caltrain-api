@@ -4,7 +4,7 @@ Public API -- everything importable from ``caltrain_api`` directly is covered
 by semantic versioning; submodule internals are not.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 from .api import CaltrainAPI
 from .corridor import Corridor
@@ -33,7 +33,13 @@ from .models import (
     TrainPosition,
     TrainStatus,
 )
-from .realtime import RealtimeSnapshot, RealtimeSource, SiriRealtimeSource, TrainObservation
+from .realtime import (
+    ExpectedCall,
+    RealtimeSnapshot,
+    RealtimeSource,
+    SiriRealtimeSource,
+    TrainObservation,
+)
 from .schedule import Schedule
 
 __all__ = [
@@ -45,6 +51,7 @@ __all__ = [
     "Journey",
     "DescriptionPolicy",
     "Direction",
+    "ExpectedCall",
     "OffCorridorError",
     "PositionSource",
     "RateLimitedError",

@@ -451,14 +451,17 @@ class Schedule:
 
     @property
     def feed_version(self) -> str:
+        """The feed's ``feed_version`` from ``feed_info.txt`` (or ``"unknown"``)."""
         return self._feed_version
 
     @property
     def valid_from(self) -> date:
+        """First service date the feed covers (``feed_start_date``, else the calendar's earliest)."""
         return self._valid_from
 
     @property
     def valid_until(self) -> date:
+        """Last service date the feed covers; past it, :meth:`load` re-downloads."""
         return self._valid_until
 
     @property
@@ -468,10 +471,12 @@ class Schedule:
 
     @property
     def corridor(self) -> Corridor:
+        """The measured SF -> Gilroy track used for all mileposts."""
         return self._corridor
 
     @property
     def description_policy(self) -> DescriptionPolicy:
+        """Thresholds and wording used for position descriptions."""
         return self._policy
 
     # -- stations -----------------------------------------------------------
@@ -690,7 +695,7 @@ class Schedule:
         The relation is WAITING before the origin departure (by best-available
         times) and ARRIVED from the destination arrival on -- in both cases
         only within ``near_radius`` of that station -- and otherwise
-        classified by :attr:`description_policy`.
+        classified by :attr:`~caltrain_api.Schedule.description_policy`.
 
         Args:
             stops: The train's stops (determine AT vs PASSING and WAITING/ARRIVED).
