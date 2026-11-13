@@ -24,3 +24,9 @@ Thumbs.db
 
 # Downloaded feed data used by tools/one-off-* exploration scripts
 .explore/
+
+# Editor workspace files
+*.code-workspace
+
+# Personal project notes for Claude Code (not part of the published project)
+CLAUDE.md
