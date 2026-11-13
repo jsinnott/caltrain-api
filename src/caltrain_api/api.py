@@ -22,6 +22,7 @@ from .errors import (
 from .models import (
     Alert,
     Departure,
+    Journey,
     Direction,
     PositionSource,
     Station,
@@ -465,6 +466,40 @@ class CaltrainAPI:
                     out.append(Departure(train=train, stop=stop))
         out.sort(key=lambda d: d.stop.departure)
         return out[:limit] if limit is not None else out
+
+    def get_schedule(
+        self,
+        origin: Station | str,
+        destination: Station | str,
+        service_date: date | None = None,
+    ) -> list[Journey]:
+        """Point-to-point timetable: every train on ``service_date`` (default:
+        today) that stops at ``origin`` and later at ``destination``, by
+        scheduled departure from ``origin``.
+
+        Direction follows from the station order. For today's trains, expected
+        times are applied where real-time data exists. Use
+        :meth:`Schedule.typical_service_date` to pick "a typical weekday".
+
+        Raises:
+            UnknownStationError: either station is unknown.
+            ValueError: origin and destination are the same station.
+        """
+        now = self._now()
+        schedule = self._maybe_refresh_schedule(now)
+        o = origin if isinstance(origin, Station) else schedule.station(origin)
+        d = destination if isinstance(destination, Station) else schedule.station(destination)
+        if o.id == d.id:
+            raise ValueError("origin and destination are the same station")
+
+        out = []
+        for train in self.get_trains(service_date):
+            ids = [s.station.id for s in train.stops]
+            if o.id in ids and d.id in ids and ids.index(o.id) < ids.index(d.id):
+                out.append(Journey(train=train, origin_stop=train.stops[ids.index(o.id)],
+                                   destination_stop=train.stops[ids.index(d.id)]))
+        out.sort(key=lambda j: j.origin_stop.scheduled_departure)
+        return out
 
     # -- alerts & raw data --------------------------------------------------
 

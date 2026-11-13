@@ -304,3 +304,20 @@ class Departure(_Frozen):
 
     train: Train
     stop: Stop
+
+
+class Journey(_Frozen):
+    """A ride on one train from one station to another (one row of a point-to-point timetable)."""
+
+    train: Train
+    origin_stop: Stop
+    destination_stop: Stop
+
+    @property
+    def scheduled_duration(self) -> timedelta:
+        return self.destination_stop.scheduled_arrival - self.origin_stop.scheduled_departure
+
+    @property
+    def duration(self) -> timedelta:
+        """Best-available duration (expected times where known)."""
+        return self.destination_stop.arrival - self.origin_stop.departure

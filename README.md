@@ -14,6 +14,7 @@ Python 3.11+. Real-time data needs a free [511.org API key](https://511.org/open
 
 ```python
 import os
+from datetime import date
 from caltrain_api import CaltrainAPI, Direction
 
 api = CaltrainAPI(api_key=os.environ.get("CALTRAIN_511_API_KEY"))  # None -> schedule only
@@ -31,6 +32,10 @@ train.next_stop, train.stops, train.alerts
 
 for d in api.get_departures("Palo Alto", direction=Direction.NORTHBOUND, limit=5):
     print(d.train.number, d.stop.departure, d.stop.delay)
+
+for j in api.get_schedule("Palo Alto", "San Francisco",
+                          api.schedule.typical_service_date("weekday", date.today())):
+    print(j.train.number, j.origin_stop.scheduled_departure, j.scheduled_duration)
 
 api.get_stations()         # in milepost order, SF first
 api.get_alerts()
@@ -65,6 +70,7 @@ Unit tests use a pinned GTFS feed and a captured 511 response (2026-11-13 11:45 
 
 ## Changelog
 
+- 0.2.0 -- `CaltrainAPI.get_schedule(origin, destination, service_date)` returning `Journey` objects (point-to-point timetable); `Schedule.typical_service_date("weekday"|"weekend", on_or_after)` picks an ordinary non-holiday date.
 - 0.1.0 -- First working release. `Schedule.load`/`refresh` (download, disk cache, conditional revalidation, offline fallback); `SiriRealtimeSource` (511 SIRI VehicleMonitoring + ServiceAlerts); `CaltrainAPI` facade with lazy polling, empty-feed/failure tolerance, rate-limit backoff, estimated/reported/scheduled positions, delays, alerts, `get_departures`. (unreleased on PyPI)
 - 0.0.1 -- Offline timetable: `Corridor`, `DescriptionPolicy`, `Schedule.from_zip`. `Train.trip_id` added; holiday "M"-prefixed trains parsed to plain numbers.
 - 0.0.0 -- API stubs for review.

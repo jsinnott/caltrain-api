@@ -15,6 +15,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -55,6 +56,9 @@ _SERVICE_TYPES = {
     "express": ServiceType.EXPRESS,
     "south county": ServiceType.SOUTH_COUNTY,
 }
+
+#: Argument to :meth:`Schedule.typical_service_date`.
+DayType = Literal["weekday", "weekend"]
 
 _TRAIN_NUMBER = re.compile(r"^[A-Za-z]*(\d+)$")
 _NAME_SUFFIX = re.compile(r"\s+(caltrain\s+)?station$", re.IGNORECASE)
@@ -515,6 +519,24 @@ class Schedule:
     def holiday(self, service_date: date) -> str | None:
         """Holiday name from the feed if ``service_date`` has modified service, e.g. 'Thanksgiving Day'."""
         return self._holidays.get(service_date)
+
+    def typical_service_date(self, day_type: DayType, on_or_after: date) -> date:
+        """The first date on or after ``on_or_after`` that is an ordinary
+        weekday (Mon-Fri) or weekend day (Sat/Sun) with no holiday service
+        changes -- e.g. for showing "the weekday timetable".
+
+        Raises:
+            ValueError: no such date within the feed's validity period.
+        """
+        d = max(on_or_after, self.valid_from)
+        while d <= self.valid_until:
+            is_weekend = d.weekday() >= 5
+            if is_weekend == (day_type == "weekend") and self.holiday(d) is None \
+                    and d not in self._exceptions:
+                return d
+            d += timedelta(days=1)
+        raise ValueError(f"no ordinary {day_type} on or after {on_or_after} "
+                         f"within the feed (valid until {self.valid_until})")
 
     def service_date_for(self, at: datetime) -> date:
         """The service date a moment *primarily* belongs to (the calendar date in Pacific time).
