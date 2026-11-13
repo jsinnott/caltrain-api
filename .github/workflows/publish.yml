@@ -1,0 +1,73 @@
+# Publish caltrain-api to PyPI when a version tag (vX.Y.Z) is pushed.
+#
+# Uses PyPI Trusted Publishing (OIDC): PyPI is configured to trust this
+# repository + workflow + environment, so no API token is stored anywhere.
+# PyPI side: https://pypi.org/manage/project/caltrain-api/settings/publishing/
+#   owner: jsinnott, repository: caltrain-api, workflow: publish.yml, environment: pypi
+#
+# Release flow (unchanged from before, minus the manual upload):
+#   bump version in pyproject.toml + src/caltrain_api/__init__.py, update the
+#   README changelog, commit, then:  git tag vX.Y.Z && git push origin vX.Y.Z
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.14"]   # oldest supported and newest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --extra dev
+      - run: uv run pytest -q tests/unit
+      - run: uv run mypy --strict src
+
+  build:
+    name: Build and check distributions
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tag must match package version
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          init_version=$(grep -m1 '^__version__ = ' src/caltrain_api/__init__.py | cut -d'"' -f2)
+          echo "tag=$GITHUB_REF_NAME pyproject=$version __init__=$init_version"
+          test "$GITHUB_REF_NAME" = "v$version" || { echo "::error::tag $GITHUB_REF_NAME != v$version"; exit 1; }
+          test "$version" = "$init_version" || { echo "::error::__version__ $init_version != $version"; exit 1; }
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/caltrain-api/
+    permissions:
+      id-token: write   # required for Trusted Publishing; nothing else gets it
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
