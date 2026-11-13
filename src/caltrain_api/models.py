@@ -229,6 +229,9 @@ class Train(_Frozen):
     """
 
     number: int = Field(description="Train number, e.g. 123. Odd = northbound.")
+    trip_id: str = Field(
+        description="Raw GTFS trip_id, e.g. '123', or 'M147' on holiday (modified) schedules."
+    )
     direction: Direction
     service_type: ServiceType
     service_date: date = Field(
@@ -272,17 +275,27 @@ class Train(_Frozen):
 
     @property
     def next_stop(self) -> Stop | None:
-        """First stop whose best-available departure is after ``as_of``."""
-        raise NotImplementedError
+        """First stop whose best-available departure is after ``as_of``.
+
+        While the train dwells at a station, that station is still the next stop.
+        """
+        return next((s for s in self.stops if s.departure > self.as_of), None)
 
     @property
     def previous_stop(self) -> Stop | None:
         """Last stop whose best-available departure is at or before ``as_of``."""
-        raise NotImplementedError
+        return next((s for s in reversed(self.stops) if s.departure <= self.as_of), None)
 
     def stop_at(self, station: Station | str) -> Stop | None:
-        """This train's stop at ``station`` (a Station, id, or name), or None if it doesn't stop there."""
-        raise NotImplementedError
+        """This train's stop at ``station`` (a Station, id, or name), or None if it doesn't stop there.
+
+        String matching is case-insensitive against the station id and name.
+        """
+        key = station.id if isinstance(station, Station) else station.strip().lower()
+        for s in self.stops:
+            if key in (s.station.id, s.station.id.lower(), s.station.name.lower()):
+                return s
+        return None
 
 
 class Departure(_Frozen):

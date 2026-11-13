@@ -15,9 +15,15 @@ behavior can change without notice.
   platform children (`70011`/`70012` etc.; Stanford's are `2537740`/`2537744`),
   plus elevator entrances (`location_type=2`). `stop_times` references
   platforms only. Stanford exists but no trip stops there.
-- **Trains**: `trip_id == trip_short_name ==` train number for all trips.
+- **Trains**: `trip_id == trip_short_name` for all trips. On regular service
+  that is the plain train number ("123"); the holiday-only ("modified")
+  service's 75 trips are prefixed: "M101".."M176". The library parses the
+  digits as `Train.number` and keeps the raw id as `Train.trip_id`. (The
+  survey script's parity check silently skipped the M trips -- 182 of 257.)
   `direction_id` 0 = North (odd numbers), 1 = South (even numbers), confirmed
   by `directions.txt`.
+- **Mileposts** (computed, SF = 0.0): San Jose Diridon 46.84 (official 46.9),
+  Gilroy 76.77 (official 77.4).
 - **Service type**: `routes.txt` short names are "Local Weekday", "Local
   Weekend", "Limited", "Express", "South County". `realtime_routes.txt`
   collapses them to clean names (Local / Limited / Express / South County).
