@@ -4,7 +4,7 @@ Public API -- everything importable from ``caltrain_api`` directly is covered
 by semantic versioning; submodule internals are not.
 """
 
-__version__ = "0.2.1"
+__version__ = "1.0.0"
 
 from .api import CaltrainAPI
 from .corridor import Corridor

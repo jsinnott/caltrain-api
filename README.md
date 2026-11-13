@@ -70,8 +70,9 @@ Unit tests use a pinned GTFS feed and a captured 511 response (2026-11-13 11:45 
 
 ## Changelog
 
+- 1.0.0 -- Stable release: the public API (everything exported from `caltrain_api`) is now covered by semantic versioning. No code changes from 0.2.1. Not yet published to PyPI.
 - 0.2.1 -- Fix: a train waiting at its origin could be placed miles down the line, because 511 reports its equipment (often finishing a previous run) before departure. Reports no longer constrain estimates before departure, and WAITING/ARRIVED apply only near the origin/destination.
 - 0.2.0 -- `CaltrainAPI.get_schedule(origin, destination, service_date)` returning `Journey` objects (point-to-point timetable); `Schedule.typical_service_date("weekday"|"weekend", on_or_after)` picks an ordinary non-holiday date.
-- 0.1.0 -- First working release. `Schedule.load`/`refresh` (download, disk cache, conditional revalidation, offline fallback); `SiriRealtimeSource` (511 SIRI VehicleMonitoring + ServiceAlerts); `CaltrainAPI` facade with lazy polling, empty-feed/failure tolerance, rate-limit backoff, estimated/reported/scheduled positions, delays, alerts, `get_departures`. (unreleased on PyPI)
+- 0.1.0 -- First working release. `Schedule.load`/`refresh` (download, disk cache, conditional revalidation, offline fallback); `SiriRealtimeSource` (511 SIRI VehicleMonitoring + ServiceAlerts); `CaltrainAPI` facade with lazy polling, empty-feed/failure tolerance, rate-limit backoff, estimated/reported/scheduled positions, delays, alerts, `get_departures`.
 - 0.0.1 -- Offline timetable: `Corridor`, `DescriptionPolicy`, `Schedule.from_zip`. `Train.trip_id` added; holiday "M"-prefixed trains parsed to plain numbers.
 - 0.0.0 -- API stubs for review.
