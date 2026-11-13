@@ -5,7 +5,7 @@ Caltrain schedules and train positions -- latitude/longitude, milepost from SF 4
 ## Install
 
 ```bash
-pip install caltrain-api        # once published; for now: uv pip install -e .
+pip install caltrain-api
 ```
 
 Python 3.11+. Real-time data needs a free [511.org API key](https://511.org/open-data/token); without one, everything works from the published timetable.
@@ -51,13 +51,15 @@ Positions offer three expressions: `lat`/`lon`, `milepost` (miles along the trac
 - Real-time data is fetched lazily, at most every 120 s (511 allows 60 requests/hour; positions only change every few minutes). Empty feeds and failures keep the last good data for up to 10 minutes, then fall back to the schedule. Rate limiting backs off automatically.
 - `CaltrainAPI` is thread-safe; share one instance.
 
-See `docs/data-findings.md` for what the data sources actually provide and how that shaped these choices.
+See [docs/data-findings.md](https://github.com/jsinnott/caltrain-api/blob/master/docs/data-findings.md) for what the data sources actually provide and how that shaped these choices.
 
 ## License
 
 MIT
 
 ## Development
+
+From a clone of https://github.com/jsinnott/caltrain-api:
 
 ```bash
 uv sync --extra dev
@@ -70,7 +72,8 @@ Unit tests use a pinned GTFS feed and a captured 511 response (2026-11-13 11:45 
 
 ## Changelog
 
-- 1.0.0 -- Stable release: the public API (everything exported from `caltrain_api`) is now covered by semantic versioning. No code changes from 0.2.1. Not yet published to PyPI.
+- 1.0.1 -- Packaging for PyPI: LICENSE file, project URLs, classifiers, `py.typed` marker (type checkers now use the library's annotations), README links that work on PyPI. No code changes.
+- 1.0.0 -- Stable release: the public API (everything exported from `caltrain_api`) is now covered by semantic versioning. No code changes from 0.2.1.
 - 0.2.1 -- Fix: a train waiting at its origin could be placed miles down the line, because 511 reports its equipment (often finishing a previous run) before departure. Reports no longer constrain estimates before departure, and WAITING/ARRIVED apply only near the origin/destination.
 - 0.2.0 -- `CaltrainAPI.get_schedule(origin, destination, service_date)` returning `Journey` objects (point-to-point timetable); `Schedule.typical_service_date("weekday"|"weekend", on_or_after)` picks an ordinary non-holiday date.
 - 0.1.0 -- First working release. `Schedule.load`/`refresh` (download, disk cache, conditional revalidation, offline fallback); `SiriRealtimeSource` (511 SIRI VehicleMonitoring + ServiceAlerts); `CaltrainAPI` facade with lazy polling, empty-feed/failure tolerance, rate-limit backoff, estimated/reported/scheduled positions, delays, alerts, `get_departures`.
