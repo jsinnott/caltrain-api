@@ -74,5 +74,18 @@ behavior can change without notice.
   the same position as VehiclePositions *plus* Aimed (scheduled) and Expected
   times for the monitored call and all onward calls. One request ~= VP + TU.
   Times are UTC ISO-8601; JSON has a UTF-8 BOM.
+  `FramedVehicleJourneyRef.DataFrameRef` is the trip's service date, so a
+  late train is matched to the right day's run exactly. `StopPointRef` is the
+  GTFS platform stop_id.
+- **Report lag** (measured 2026-11-13 12:50-12:58 with
+  `tools/one-off-measure-report-lag.py`, 31 observations): reported positions
+  normally trail the predicted timeline by ~1 minute (median +0.9 min).
+  But at 12:50 *every* train's report lagged ~15 minutes at once -- 511
+  briefly served a frozen batch of positions -- and two minutes later all
+  were fresh again and agreed with the predictions. Conclusion: predicted
+  times are the more reliable source; reports are used only to stop an
+  estimate falling behind them (a train held longer than predicted).
+- **Trillium's keyless alerts feed** (from `linked_datasets.txt`) returned
+  HTTP 500 on 2026-11-13; the library uses 511's ServiceAlerts instead.
 - Real-time trip ids match static trip ids. Real-time `route_id` is the route
   *short name* ("Local Weekday"), not the static numeric `route_id`.

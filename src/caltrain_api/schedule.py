@@ -11,14 +11,16 @@ import logging
 import re
 import zipfile
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
+import platformdirs
 
+from ._feedcache import FeedCache
 from .corridor import Corridor, LatLon
 from .describe import DescriptionPolicy
 from .errors import ScheduleUnavailableError, UnknownStationError, UnknownTrainError
@@ -80,6 +82,12 @@ def gtfs_time(service_date: date, seconds: int) -> datetime:
     noon = datetime.combine(service_date, time(12), tzinfo=TZ)
     base = noon.astimezone(UTC) - timedelta(hours=12)
     return (base + timedelta(seconds=seconds)).astimezone(TZ)
+
+
+def parse_train_number(value: str) -> int | None:
+    """'123' -> 123; holiday-schedule 'M147' -> 147; anything else -> None."""
+    m = _TRAIN_NUMBER.match(value.strip())
+    return int(m.group(1)) if m else None
 
 
 def _require_aware(at: datetime) -> datetime:
@@ -158,6 +166,7 @@ class Schedule:
         url: str = DEFAULT_GTFS_URL,
         http_client: httpx.Client | None = None,
         description_policy: DescriptionPolicy | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> Schedule:
         """Load the timetable, downloading it if the cache is missing or stale.
 
@@ -172,11 +181,44 @@ class Schedule:
             url: GTFS zip URL.
             http_client: Injected for testing or connection reuse.
             description_policy: Thresholds for position descriptions.
+            clock: Returns "now" (aware); for tests. Drives staleness checks.
 
         Raises:
             ScheduleUnavailableError: no cached copy and the download failed.
         """
-        raise NotImplementedError("network loading arrives with the real-time work")
+        policy = description_policy or DescriptionPolicy()
+        cache = FeedCache(
+            cache_dir=cache_dir or Path(platformdirs.user_cache_dir("caltrain-api")),
+            url=url, max_age=max_age, http_client=http_client, clock=clock or _now,
+        )
+        return cls._load_from_cache(cache, policy, force=False)
+
+    @classmethod
+    def _load_from_cache(cls, cache: FeedCache, policy: DescriptionPolicy, *, force: bool) -> Schedule:
+        cached: Schedule | None = None
+        if cache.zip_path.exists():
+            try:
+                cached = cls._from_bytes(cache.zip_path.read_bytes(), policy)
+            except ScheduleUnavailableError as exc:
+                log.warning("Cached GTFS unusable, will re-download: %s", exc)
+
+        result = cached
+        if force or cached is None or cache.is_stale(cached.valid_until):
+            try:
+                fresh = cache.download(lambda data: cls._from_bytes(data, policy),
+                                       conditional=cached is not None)
+                if fresh is not None:
+                    result = fresh
+            except ScheduleUnavailableError as exc:
+                if cached is None:
+                    raise
+                log.warning("GTFS refresh failed; using cached copy: %s", exc)
+
+        assert result is not None  # download() returns None only when a cache exists
+        meta = cache.read_meta()
+        result._cache = cache
+        result._downloaded_at = meta.downloaded_at if meta else None
+        return result
 
     @classmethod
     def from_zip(cls, path: Path, *, description_policy: DescriptionPolicy | None = None) -> Schedule:
@@ -187,15 +229,24 @@ class Schedule:
         """
         log.info("Loading GTFS from %s", path)
         try:
-            with zipfile.ZipFile(path) as zf:
-                return cls(zf, description_policy=description_policy or DescriptionPolicy())
-        except (OSError, zipfile.BadZipFile, KeyError, ValueError) as exc:
-            raise ScheduleUnavailableError(f"cannot load GTFS from {path}: {exc}") from exc
+            data = Path(path).read_bytes()
+        except OSError as exc:
+            raise ScheduleUnavailableError(f"cannot read GTFS from {path}: {exc}") from exc
+        return cls._from_bytes(data, description_policy or DescriptionPolicy())
+
+    @classmethod
+    def _from_bytes(cls, data: bytes, policy: DescriptionPolicy) -> Schedule:
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                return cls(zf, description_policy=policy)
+        except (zipfile.BadZipFile, KeyError, ValueError) as exc:
+            raise ScheduleUnavailableError(f"not a usable GTFS feed: {exc}") from exc
 
     def __init__(self, zf: zipfile.ZipFile, *, description_policy: DescriptionPolicy):
         """Parse an open GTFS zip. Use :meth:`load` or :meth:`from_zip` instead."""
         self._policy = description_policy
         self._downloaded_at: datetime | None = None
+        self._cache: FeedCache | None = None
 
         def table(name: str, required: bool = True) -> list[dict[str, str]]:
             if name not in zf.namelist():
@@ -247,9 +298,13 @@ class Schedule:
         served_parents: set[str] = set()
         parent_of: dict[str, str] = {}
         for s in stops:
-            if (s.get("location_type") or "0") != "0" or not s.get("parent_station"):
+            if not s.get("parent_station"):
                 continue
+            # Every child (platforms, and elevators/entrances that alerts cite)
+            # resolves to its station in lookups; only platforms carry service.
             parent_of[s["stop_id"]] = s["parent_station"]
+            if (s.get("location_type") or "0") != "0":
+                continue
             d = platform_dir.get(s["stop_id"])
             if d is None:  # unserved platform: fall back to its name
                 name = s["stop_name"].lower()
@@ -310,11 +365,11 @@ class Schedule:
             # Holiday ("modified") service numbers trains like "M147"; the train
             # number is the digits. The raw id is kept as Train.trip_id.
             raw_number = (t.get("trip_short_name") or t["trip_id"]).strip()
-            m = _TRAIN_NUMBER.match(raw_number)
-            if m is None:
+            parsed = parse_train_number(raw_number)
+            if parsed is None:
                 log.warning("Skipping trip %s: unparseable train number %r", t["trip_id"], raw_number)
                 continue
-            number = int(m.group(1))
+            number = parsed
             calls = tuple(c for _, c in sorted(calls_by_trip.get(t["trip_id"], [])))
             if len(calls) < 2:
                 log.warning("Skipping trip %s: fewer than two stops", t["trip_id"])
@@ -362,9 +417,31 @@ class Schedule:
     def refresh(self, *, force: bool = False) -> Schedule:
         """Return an up-to-date Schedule, downloading only if stale (or ``force``).
 
-        Returns ``self`` when nothing changed.
+        Returns ``self`` when nothing changed, including for schedules made
+        with :meth:`from_zip`, which have no download source.
+
+        Raises:
+            ScheduleUnavailableError: only when ``force`` is set and the download fails.
         """
-        raise NotImplementedError("network loading arrives with the real-time work")
+        if self._cache is None:
+            return self
+        if not force and not self._cache.is_stale(self.valid_until):
+            return self
+        try:
+            fresh = self._cache.download(lambda data: Schedule._from_bytes(data, self._policy),
+                                         conditional=not force)
+        except ScheduleUnavailableError as exc:
+            if force:
+                raise
+            log.warning("GTFS refresh failed; keeping current schedule: %s", exc)
+            return self
+        if fresh is None:
+            return self
+        meta = self._cache.read_meta()
+        fresh._cache = self._cache
+        fresh._downloaded_at = meta.downloaded_at if meta else None
+        log.info("Schedule refreshed: %s -> %s", self.feed_version, fresh.feed_version)
+        return fresh
 
     # -- feed metadata ------------------------------------------------------
 
@@ -574,16 +651,45 @@ class Schedule:
         milepost = _interpolate(mps, times, at)
         if milepost is None:
             return None
+        return self.position_at_milepost(direction, stops, milepost, at, source=source)
 
+    def position_at_milepost(
+        self,
+        direction: Direction,
+        stops: Sequence[Stop],
+        milepost: float,
+        at: datetime,
+        *,
+        source: PositionSource,
+        lat_lon: tuple[float, float] | None = None,
+    ) -> TrainPosition:
+        """Build a :class:`TrainPosition` for a train known to be at ``milepost``.
+
+        The relation is WAITING before the origin departure (by best-available
+        times), ARRIVED from the destination arrival on, and otherwise
+        classified by :attr:`description_policy`.
+
+        Args:
+            stops: The train's stops (determine AT vs PASSING and WAITING/ARRIVED).
+            lat_lon: Report this lat/lon instead of the track point at
+                ``milepost`` (used for raw REPORTED positions).
+        """
+        times = [(s.arrival, s.departure) for s in stops]
+        if source is PositionSource.SCHEDULED:
+            times = [(s.scheduled_arrival, s.scheduled_departure) for s in stops]
         served = {s.station.id for s in stops}
         relation, station, prev, nxt = self._policy.classify(
             milepost, direction, self._served_stations, served)
-        if at >= times[-1][0]:
+        if at < times[0][1]:
+            relation, station = Relation.WAITING, stops[0].station
+        elif at >= times[-1][0]:
             relation, station = Relation.ARRIVED, stops[-1].station
-        loc = self._corridor.at_milepost(
-            min(max(milepost, self._corridor.start), self._corridor.length))
+        if lat_lon is None:
+            loc = self._corridor.at_milepost(
+                min(max(milepost, self._corridor.start), self._corridor.length))
+            lat_lon = (loc.lat, loc.lon)
         return TrainPosition(
-            lat=loc.lat, lon=loc.lon, milepost=milepost,
+            lat=lat_lon[0], lon=lat_lon[1], milepost=milepost,
             source=source, as_of=at.astimezone(TZ), direction=direction,
             relation=relation, station=station, previous_station=prev, next_station=nxt,
             description=self._policy.phrase(

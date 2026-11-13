@@ -244,8 +244,9 @@ class Train(_Frozen):
 
     position: TrainPosition | None = Field(
         default=None,
-        description="Best estimate: ESTIMATED when real-time data exists, else SCHEDULED. "
-        "None when the train is not running at ``as_of``.",
+        description="Best estimate: ESTIMATED when real-time predicted times exist; REPORTED "
+        "when the feed gives only a location; else SCHEDULED. None when the train is not "
+        "running at ``as_of``.",
     )
     reported_position: TrainPosition | None = Field(
         default=None, description="Raw real-time location, if the feed reports this train."

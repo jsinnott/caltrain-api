@@ -1,24 +1,52 @@
 # caltrain-api
 
-Caltrain schedules and train positions -- latitude/longitude, milepost from SF 4th & King, and plain-English descriptions ("approaching Redwood City") -- from Caltrain static GTFS and 511.org real-time data.
+Caltrain schedules and train positions -- latitude/longitude, milepost from SF 4th & King, and plain-English descriptions ("approaching Redwood City") -- from Caltrain's static GTFS and 511.org real-time data.
 
-Status: pre-release. The timetable side (`Schedule`, `Corridor`, `DescriptionPolicy`) works offline from a local GTFS zip; downloading/caching the feed and real-time data (`CaltrainAPI`) are not implemented yet. See `docs/data-findings.md` for what the data sources actually provide.
+## Install
 
-## Using the timetable (works today)
+```bash
+pip install caltrain-api        # once published; for now: uv pip install -e .
+```
+
+Python 3.11+. Real-time data needs a free [511.org API key](https://511.org/open-data/token); without one, everything works from the published timetable.
+
+## Usage
 
 ```python
-from datetime import datetime
-from pathlib import Path
-from zoneinfo import ZoneInfo
+import os
+from caltrain_api import CaltrainAPI, Direction
 
-from caltrain_api import Schedule
+api = CaltrainAPI(api_key=os.environ.get("CALTRAIN_511_API_KEY"))  # None -> schedule only
 
-schedule = Schedule.from_zip(Path("caltrain-gtfs.zip"))
-at = datetime(2026, 11, 13, 17, 30, tzinfo=ZoneInfo("America/Los_Angeles"))
-for train in schedule.active_trains(at):
-    p = train.position
-    print(train.number, train.service_type.value, f"mp {p.milepost:.1f}", p.description)
+for train in api.get_active_trains():
+    p = train.position                          # best estimate
+    print(train.number, train.service_type.value, f"mp {p.milepost:.1f}",
+          p.description, train.delay)           # e.g. 124 local mp 30.0 at Palo Alto 0:01:58
+
+train = api.get_train(124)
+train.position             # ESTIMATED: from real-time predicted times
+train.reported_position    # REPORTED: raw feed lat/lon (can be minutes stale)
+train.scheduled_position   # SCHEDULED: where the timetable says it should be
+train.next_stop, train.stops, train.alerts
+
+for d in api.get_departures("Palo Alto", direction=Direction.NORTHBOUND, limit=5):
+    print(d.train.number, d.stop.departure, d.stop.delay)
+
+api.get_stations()         # in milepost order, SF first
+api.get_alerts()
 ```
+
+Every method that takes `at=` answers for any moment (timezone-aware datetimes); real-time data applies only within 5 minutes of now.
+
+Positions offer three expressions: `lat`/`lon`, `milepost` (miles along the track from SF 4th & King = 0.0, ~76.8 at Gilroy; computed from GTFS geometry, so close to but not identical with Caltrain's official mileposts), and `description` plus a structured `relation` (`AT`, `PASSING`, `APPROACHING`, `DEPARTED`, `BETWEEN`, `WAITING`, `ARRIVED`). Thresholds (0.2 mi "at", 0.5 mi "approaching/departed") are configurable via `DescriptionPolicy`.
+
+### Data handling
+
+- The static GTFS is downloaded on first use, cached in the user cache dir (`~/Library/Caches/caltrain-api` on macOS), and re-checked daily or when the feed expires. `api.refresh_schedule(force=True)` forces it. Offline, the cached copy is used.
+- Real-time data is fetched lazily, at most every 120 s (511 allows 60 requests/hour; positions only change every few minutes). Empty feeds and failures keep the last good data for up to 10 minutes, then fall back to the schedule. Rate limiting backs off automatically.
+- `CaltrainAPI` is thread-safe; share one instance.
+
+See `docs/data-findings.md` for what the data sources actually provide and how that shaped these choices.
 
 ## License
 
@@ -28,13 +56,15 @@ MIT
 
 ```bash
 uv sync --extra dev
-.venv/bin/pytest tests/unit
+.venv/bin/pytest tests/unit                                     # offline, pinned fixtures
+CALTRAIN_511_API_KEY=... .venv/bin/pytest -s tests/integration   # live; ~2 511 requests
 .venv/bin/mypy --strict src
 ```
 
-Unit tests run against a pinned copy of the GTFS feed in `tests/fixtures/`, so they don't change when Caltrain publishes a new one. `tools/one-off-explore-*.py` survey the live data sources (the real-time one needs `CALTRAIN_511_API_KEY`).
+Unit tests use a pinned GTFS feed and a captured 511 response (2026-11-13 11:45 PT) in `tests/fixtures/`. `tools/one-off-*.py` are survey/measurement scripts for the live data sources.
 
 ## Changelog
 
-- 0.0.1 -- Offline timetable: `Corridor` (stitched SF->Gilroy track, mileposts), `DescriptionPolicy` (at/passing/approaching/departed/passed/between), `Schedule.from_zip` (stations, service calendar incl. holidays and past-midnight trips, scheduled positions). `Train.trip_id` added; holiday "M"-prefixed trains parsed to plain numbers. (unreleased)
-- 0.0.0 -- API stubs for review (unreleased).
+- 0.1.0 -- First working release. `Schedule.load`/`refresh` (download, disk cache, conditional revalidation, offline fallback); `SiriRealtimeSource` (511 SIRI VehicleMonitoring + ServiceAlerts); `CaltrainAPI` facade with lazy polling, empty-feed/failure tolerance, rate-limit backoff, estimated/reported/scheduled positions, delays, alerts, `get_departures`. (unreleased on PyPI)
+- 0.0.1 -- Offline timetable: `Corridor`, `DescriptionPolicy`, `Schedule.from_zip`. `Train.trip_id` added; holiday "M"-prefixed trains parsed to plain numbers.
+- 0.0.0 -- API stubs for review.
