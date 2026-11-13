@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "caltrain-api"
-version = "0.2.0"
+version = "0.2.1"
 description = "Caltrain schedules and train positions (lat/lon, milepost, and plain-English) from GTFS and 511 real-time data."
 readme = "README.md"
 requires-python = ">=3.11"

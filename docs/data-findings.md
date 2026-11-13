@@ -85,6 +85,10 @@ behavior can change without notice.
   were fresh again and agreed with the predictions. Conclusion: predicted
   times are the more reliable source; reports are used only to stop an
   estimate falling behind them (a train held longer than predicted).
+- **Pre-departure reports are the equipment, not the trip**: a train waiting
+  to start (e.g. 140 at SF) can be reported miles away -- its trainset still
+  finishing the previous run (seen 2026-11-13 ~13:50, 140 reported at mp 10).
+  The library ignores reports for reconciliation until departure.
 - **Trillium's keyless alerts feed** (from `linked_datasets.txt`) returned
   HTTP 500 on 2026-11-13; the library uses 511's ServiceAlerts instead.
 - Real-time trip ids match static trip ids. Real-time `route_id` is the route

@@ -688,7 +688,8 @@ class Schedule:
         """Build a :class:`TrainPosition` for a train known to be at ``milepost``.
 
         The relation is WAITING before the origin departure (by best-available
-        times), ARRIVED from the destination arrival on, and otherwise
+        times) and ARRIVED from the destination arrival on -- in both cases
+        only within ``near_radius`` of that station -- and otherwise
         classified by :attr:`description_policy`.
 
         Args:
@@ -702,9 +703,12 @@ class Schedule:
         served = {s.station.id for s in stops}
         relation, station, prev, nxt = self._policy.classify(
             milepost, direction, self._served_stations, served)
-        if at < times[0][1]:
+        # WAITING/ARRIVED only when actually near the origin/destination: a
+        # pre-departure report can place the equipment far away.
+        near = self._policy.near_radius
+        if at < times[0][1] and abs(milepost - stops[0].station.location.milepost) <= near:
             relation, station = Relation.WAITING, stops[0].station
-        elif at >= times[-1][0]:
+        elif at >= times[-1][0] and abs(milepost - stops[-1].station.location.milepost) <= near:
             relation, station = Relation.ARRIVED, stops[-1].station
         if lat_lon is None:
             loc = self._corridor.at_milepost(

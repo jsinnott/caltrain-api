@@ -326,7 +326,10 @@ class CaltrainAPI:
             est_mp = _interpolate(mps, times, at)
             if est_mp is None and status is TrainStatus.SCHEDULED:
                 est_mp = mps[0]  # waiting at origin
-            if est_mp is not None and reported is not None:
+            # Before departure, 511 reports where the train's *equipment* is --
+            # often still finishing its previous run miles away -- so the
+            # report says nothing about this trip yet.
+            if est_mp is not None and reported is not None and status is not TrainStatus.SCHEDULED:
                 est_mp = self._reconcile(train.direction, est_mp, reported)
             position = (schedule.position_at_milepost(train.direction, est_stops, est_mp, at,
                                                       source=PositionSource.ESTIMATED)

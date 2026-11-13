@@ -98,6 +98,25 @@ def test_active_trains_include_late_and_waiting(schedule, clock):
     assert waiting.position.description == "waiting to depart San Francisco"
 
 
+def test_waiting_train_ignores_far_away_equipment_report(schedule, clock):
+    """Before departure 511 reports the equipment, which may still be on its previous run."""
+    millbrae = schedule.station("Millbrae").location
+    trains = dict(TRAINS)
+    trains[128] = TRAINS[128].model_copy(update={"lat": millbrae.lat, "lon": millbrae.lon})
+
+    class Src:
+        def fetch(self):
+            return RealtimeSnapshot(fetched_at=clock(), trains=trains)
+
+    api = CaltrainAPI(schedule=schedule, realtime=Src(), clock=clock)
+    t = api.get_train(128)
+    assert t.status is TrainStatus.SCHEDULED
+    assert t.position.milepost == pytest.approx(0.0, abs=0.01)
+    assert t.position.description == "waiting to depart San Francisco"
+    assert t.reported_position.relation is not Relation.WAITING
+    assert "Millbrae" in t.reported_position.description
+
+
 def test_three_positions(schedule, clock):
     api, _ = make_api(schedule, clock)
     t = api.get_train(124)
